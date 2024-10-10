@@ -11,11 +11,11 @@ from dagster._api.snapshot_repository import (
 from dagster._core.errors import DagsterUserCodeProcessError
 from dagster._core.instance import DagsterInstance
 from dagster._core.remote_representation import (
-    ExternalRepositoryData,
     ManagedGrpcPythonEnvCodeLocationOrigin,
+    RepositorySnap,
 )
-from dagster._core.remote_representation.external import ExternalRepository
-from dagster._core.remote_representation.external_data import ExternalJobData
+from dagster._core.remote_representation.external import RemoteRepository
+from dagster._core.remote_representation.external_data import JobDataSnap
 from dagster._core.remote_representation.handle import RepositoryHandle
 from dagster._core.remote_representation.origin import RemoteRepositoryOrigin
 from dagster._core.test_utils import instance_for_test
@@ -35,7 +35,7 @@ def test_streaming_external_repositories_api_grpc(instance):
 
         external_repository_data = external_repo_datas["bar_repo"]
 
-        assert isinstance(external_repository_data, ExternalRepositoryData)
+        assert isinstance(external_repository_data, RepositorySnap)
         assert external_repository_data.name == "bar_repo"
         assert external_repository_data.metadata == {
             "string": TextMetadataValue("foo"),
@@ -117,7 +117,7 @@ def test_giant_external_repository_streaming_grpc():
 
             external_repository_data = external_repos_data["giant_repo"]
 
-            assert isinstance(external_repository_data, ExternalRepositoryData)
+            assert isinstance(external_repository_data, RepositorySnap)
             assert external_repository_data.name == "giant_repo"
 
 
@@ -141,22 +141,19 @@ def test_defer_snapshots(instance: DagsterInstance):
                 repo_origin,
                 ref.name,
             )
-            return deserialize_value(reply.serialized_job_data, ExternalJobData)
+            return deserialize_value(reply.serialized_job_data, JobDataSnap)
 
-        external_repository_data = deserialize_value(ser_repo_data, ExternalRepositoryData)
-        assert (
-            external_repository_data.external_job_refs
-            and len(external_repository_data.external_job_refs) == 6
-        )
-        assert external_repository_data.external_job_datas is None
+        external_repository_data = deserialize_value(ser_repo_data, RepositorySnap)
+        assert external_repository_data.job_refs and len(external_repository_data.job_refs) == 6
+        assert external_repository_data.job_datas is None
 
-        repo = ExternalRepository(
+        repo = RemoteRepository(
             external_repository_data,
-            RepositoryHandle(repository_name="bar_repo", code_location=code_location),
+            RepositoryHandle.from_location(repository_name="bar_repo", code_location=code_location),
             instance=instance,
             ref_to_data_fn=_ref_to_data,
         )
-        jobs = repo.get_all_external_jobs()
+        jobs = repo.get_all_jobs()
         assert len(jobs) == 6
         assert _state.get("cnt", 0) == 0
 
@@ -180,6 +177,6 @@ def test_defer_snapshots(instance: DagsterInstance):
         assert _state.get("cnt", 0) == 1
 
         # refetching job should share fetched data
-        job = repo.get_all_external_jobs()[0]
+        job = repo.get_all_jobs()[0]
         _ = job.job_snapshot
         assert _state.get("cnt", 0) == 1

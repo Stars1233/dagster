@@ -57,11 +57,11 @@ def test_asset_check_run_request_sensor(instance: DagsterInstance, executor):
         workspace_load_target=module_target, instance=instance
     ) as workspace_context:
         external_repo = load_external_repo(workspace_context, "__repository__")
-        external_sensor = external_repo.get_external_sensor(asset_check_run_request_sensor.name)
+        external_sensor = external_repo.get_sensor(asset_check_run_request_sensor.name)
 
         instance.add_instigator_state(
             InstigatorState(
-                external_sensor.get_external_origin(),
+                external_sensor.get_remote_origin(),
                 InstigatorType.SENSOR,
                 InstigatorStatus.RUNNING,
             )
@@ -70,7 +70,7 @@ def test_asset_check_run_request_sensor(instance: DagsterInstance, executor):
 
         assert instance.get_runs_count() == 1
         ticks = instance.get_ticks(
-            external_sensor.get_external_origin_id(), external_sensor.selector_id
+            external_sensor.get_remote_origin_id(), external_sensor.selector_id
         )
         assert len(ticks) == 1
 

@@ -15,7 +15,7 @@ from dagster_tests.api_tests.utils import get_bar_repo_code_location
 def _test_job_subset_grpc(job_handle, api_client, op_selection=None, include_parent_snapshot=True):
     return sync_get_external_job_subset_grpc(
         api_client,
-        job_handle.get_external_origin(),
+        job_handle.get_remote_origin(),
         op_selection=op_selection,
         include_parent_snapshot=include_parent_snapshot,
     )
@@ -40,7 +40,7 @@ def test_job_snapshot_deserialize_error(instance):
         external_pipeline_subset_result = deserialize_value(
             api_client.external_pipeline_subset(
                 pipeline_subset_snapshot_args=JobSubsetSnapshotArgs(
-                    job_origin=job_handle.get_external_origin(),
+                    job_origin=job_handle.get_remote_origin(),
                     op_selection=None,
                     asset_selection=None,
                     include_parent_snapshot=True,
@@ -62,8 +62,8 @@ def test_job_with_valid_subset_snapshot_api_grpc(instance):
         assert external_job_subset_result.success is True
         assert external_job_subset_result.external_job_data.name == "foo"
         assert (
-            external_job_subset_result.external_job_data.parent_job_snapshot
-            == code_location.get_repository("bar_repo").get_full_external_job("foo").job_snapshot
+            external_job_subset_result.external_job_data.parent_job
+            == code_location.get_repository("bar_repo").get_full_job("foo").job_snapshot
         )
 
 
@@ -78,7 +78,7 @@ def test_job_with_valid_subset_snapshot_without_parent_snapshot(instance):
         assert isinstance(external_job_subset_result, ExternalJobSubsetResult)
         assert external_job_subset_result.success is True
         assert external_job_subset_result.external_job_data.name == "foo"
-        assert not external_job_subset_result.external_job_data.parent_job_snapshot
+        assert not external_job_subset_result.external_job_data.parent_job
 
 
 def test_job_with_invalid_subset_snapshot_api_grpc(instance):

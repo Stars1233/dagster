@@ -133,7 +133,7 @@ def retry_run(
 
     external_repo = code_location.get_repository(repo_name)
 
-    if not external_repo.has_external_job(failed_run.job_name):
+    if not external_repo.has_job(failed_run.job_name):
         instance.report_engine_event(
             f"Could not find job {failed_run.job_name} in repository {repo_name}, unable"
             " to retry the run. It was likely renamed or deleted.",
@@ -141,7 +141,7 @@ def retry_run(
         )
         return
 
-    external_job = code_location.get_external_job(
+    remote_job = code_location.get_external_job(
         JobSubsetSelector(
             location_name=origin.code_location_origin.location_name,
             repository_name=repo_name,
@@ -158,7 +158,7 @@ def retry_run(
     new_run = instance.create_reexecuted_run(
         parent_run=failed_run,
         code_location=code_location,
-        external_job=external_job,
+        remote_job=remote_job,
         strategy=strategy,
         extra_tags=tags,
         use_parent_run_tags=True,

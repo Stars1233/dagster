@@ -17,7 +17,7 @@ from typing import (
 from typing_extensions import Self
 
 import dagster._check as check
-from dagster._annotations import PublicAttr, public
+from dagster._annotations import PublicAttr, experimental_param, public
 from dagster._core.definitions.asset_check_spec import AssetCheckKey
 from dagster._core.definitions.events import AssetKey
 from dagster._core.loader import InstanceLoadableBy
@@ -35,13 +35,14 @@ from dagster._core.storage.tags import (
     TICK_ID_TAG,
 )
 from dagster._core.utils import make_new_run_id
+from dagster._record import IHaveNew, record_custom
 from dagster._serdes.serdes import NamedTupleSerializer, whitelist_for_serdes
 
 if TYPE_CHECKING:
     from dagster._core.definitions.schedule_definition import ScheduleDefinition
     from dagster._core.definitions.sensor_definition import SensorDefinition
     from dagster._core.instance import DagsterInstance
-    from dagster._core.remote_representation.external import ExternalSchedule, ExternalSensor
+    from dagster._core.remote_representation.external import RemoteSchedule, RemoteSensor
     from dagster._core.remote_representation.origin import RemoteJobOrigin
     from dagster._core.scheduler.instigation import InstigatorState
 
@@ -485,13 +486,13 @@ class DagsterRun(
 
     @staticmethod
     def tags_for_schedule(
-        schedule: Union["InstigatorState", "ExternalSchedule", "ScheduleDefinition"],
+        schedule: Union["InstigatorState", "RemoteSchedule", "ScheduleDefinition"],
     ) -> Mapping[str, str]:
         return {SCHEDULE_NAME_TAG: schedule.name}
 
     @staticmethod
     def tags_for_sensor(
-        sensor: Union["InstigatorState", "ExternalSensor", "SensorDefinition"],
+        sensor: Union["InstigatorState", "RemoteSensor", "SensorDefinition"],
     ) -> Mapping[str, str]:
         return {SENSOR_NAME_TAG: sensor.name}
 
@@ -508,22 +509,8 @@ class DagsterRun(
         return {TICK_ID_TAG: tick_id, **automation_tags}
 
 
-class RunsFilter(
-    NamedTuple(
-        "_RunsFilter",
-        [
-            ("run_ids", Sequence[str]),
-            ("job_name", Optional[str]),
-            ("statuses", Sequence[DagsterRunStatus]),
-            ("tags", Mapping[str, Union[str, Sequence[str]]]),
-            ("snapshot_id", Optional[str]),
-            ("updated_after", Optional[datetime]),
-            ("updated_before", Optional[datetime]),
-            ("created_after", Optional[datetime]),
-            ("created_before", Optional[datetime]),
-        ],
-    )
-):
+@record_custom
+class RunsFilter(IHaveNew):
     """Defines a filter across job runs, for use when querying storage directly.
 
     Each field of the RunsFilter represents a logical AND with each other. For
@@ -542,9 +529,21 @@ class RunsFilter(
         snapshot_id (Optional[str]): The ID of the job snapshot to query for. Intended for internal use.
         updated_after (Optional[DateTime]): Filter by runs that were last updated before this datetime.
         created_before (Optional[DateTime]): Filter by runs that were created before this datetime.
-
+        exclude_subruns (Optional[bool]): If true, runs that were launched to backfill historical data will be excluded from results.
     """
 
+    run_ids: Optional[Sequence[str]]
+    job_name: Optional[str]
+    statuses: Sequence[DagsterRunStatus]
+    tags: Mapping[str, Union[str, Sequence[str]]]
+    snapshot_id: Optional[str]
+    updated_after: Optional[datetime]
+    updated_before: Optional[datetime]
+    created_after: Optional[datetime]
+    created_before: Optional[datetime]
+    exclude_subruns: Optional[bool]
+
+    @experimental_param(param="exclude_subruns")
     def __new__(
         cls,
         run_ids: Optional[Sequence[str]] = None,
@@ -556,31 +555,33 @@ class RunsFilter(
         updated_before: Optional[datetime] = None,
         created_after: Optional[datetime] = None,
         created_before: Optional[datetime] = None,
+        exclude_subruns: Optional[bool] = None,
     ):
         check.invariant(run_ids != [], "When filtering on run ids, a non-empty list must be used.")
 
-        return super(RunsFilter, cls).__new__(
+        return super().__new__(
             cls,
-            run_ids=check.opt_sequence_param(run_ids, "run_ids", of_type=str),
-            job_name=check.opt_str_param(job_name, "job_name"),
-            statuses=check.opt_sequence_param(statuses, "statuses", of_type=DagsterRunStatus),
-            tags=check.opt_mapping_param(tags, "tags", key_type=str),
-            snapshot_id=check.opt_str_param(snapshot_id, "snapshot_id"),
-            updated_after=check.opt_inst_param(updated_after, "updated_after", datetime),
-            updated_before=check.opt_inst_param(updated_before, "updated_before", datetime),
-            created_after=check.opt_inst_param(created_after, "created_after", datetime),
-            created_before=check.opt_inst_param(created_before, "created_before", datetime),
+            run_ids=run_ids,
+            job_name=job_name,
+            statuses=statuses or [],
+            tags=tags or {},
+            snapshot_id=snapshot_id,
+            updated_after=updated_after,
+            updated_before=updated_before,
+            created_after=created_after,
+            created_before=created_before,
+            exclude_subruns=exclude_subruns,
         )
 
     @staticmethod
     def for_schedule(
-        schedule: Union["ExternalSchedule", "InstigatorState", "ScheduleDefinition"],
+        schedule: Union["RemoteSchedule", "InstigatorState", "ScheduleDefinition"],
     ) -> "RunsFilter":
         return RunsFilter(tags=DagsterRun.tags_for_schedule(schedule))
 
     @staticmethod
     def for_sensor(
-        sensor: Union["ExternalSensor", "InstigatorState", "SensorDefinition"],
+        sensor: Union["RemoteSensor", "InstigatorState", "SensorDefinition"],
     ) -> "RunsFilter":
         return RunsFilter(tags=DagsterRun.tags_for_sensor(sensor))
 
@@ -641,10 +642,8 @@ class RunRecord(
         )
 
     @classmethod
-    async def _batch_load(
-        cls,
-        keys: Iterable[str],
-        instance: "DagsterInstance",
+    def _blocking_batch_load(
+        cls, keys: Iterable[str], instance: "DagsterInstance"
     ) -> Iterable[Optional["RunRecord"]]:
         result_map: Dict[str, Optional[RunRecord]] = {run_id: None for run_id in keys}
 

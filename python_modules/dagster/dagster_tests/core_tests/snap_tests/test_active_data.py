@@ -4,12 +4,10 @@ from unittest import mock
 
 from dagster import daily_partitioned_config, job, op, repository
 from dagster._core.definitions.decorators.schedule_decorator import schedule
-from dagster._core.remote_representation import (
-    external_job_data_from_def,
-    external_repository_data_from_def,
-)
+from dagster._core.remote_representation import external_job_data_from_def
 from dagster._core.remote_representation.external_data import (
-    ExternalTimeWindowPartitionsDefinitionData,
+    RepositorySnap,
+    TimeWindowPartitionsSnap,
 )
 from dagster._core.snap.job_snapshot import create_job_snapshot_id
 from dagster._core.test_utils import in_process_test_workspace, instance_for_test
@@ -52,26 +50,19 @@ def test_external_repository_data(snapshot):
     def repo():
         return [foo_job, foo_schedule]
 
-    external_repo_data = external_repository_data_from_def(repo)
-    assert external_repo_data.get_external_job_data("foo_job")
-    assert external_repo_data.get_external_schedule_data("foo_schedule")
+    external_repo_data = RepositorySnap.from_def(repo)
+    assert external_repo_data.get_job_data("foo_job")
+    assert external_repo_data.get_schedule("foo_schedule")
 
-    job_partition_set_data = external_repo_data.get_external_partition_set_data(
-        "foo_job_partition_set"
-    )
+    job_partition_set_data = external_repo_data.get_partition_set("foo_job_partition_set")
     assert job_partition_set_data
-    assert isinstance(
-        job_partition_set_data.external_partitions_data, ExternalTimeWindowPartitionsDefinitionData
-    )
+    assert isinstance(job_partition_set_data.partitions, TimeWindowPartitionsSnap)
 
     now = get_current_datetime()
 
-    assert (
-        job_partition_set_data.external_partitions_data.get_partitions_definition().get_partition_keys(
-            now
-        )
-        == my_partitioned_config.partitions_def.get_partition_keys(now)
-    )
+    assert job_partition_set_data.partitions.get_partitions_definition().get_partition_keys(
+        now
+    ) == my_partitioned_config.partitions_def.get_partition_keys(now)
 
     snapshot.assert_match(serialize_pp(external_repo_data))
 
@@ -95,7 +86,7 @@ def test_external_repo_shared_index(snapshot_mock):
             def _fetch_snap_id():
                 location = workspace.code_locations[0]
                 ex_repo = next(iter(location.get_repositories().values()))
-                return ex_repo.get_all_external_jobs()[0].identifying_job_snapshot_id
+                return ex_repo.get_all_jobs()[0].identifying_job_snapshot_id
 
             _fetch_snap_id()
             assert snapshot_mock.call_count == 1
@@ -117,7 +108,7 @@ def test_external_repo_shared_index_threaded(snapshot_mock):
             def _fetch_snap_id():
                 location = workspace.code_locations[0]
                 ex_repo = next(iter(location.get_repositories().values()))
-                return ex_repo.get_all_external_jobs()[0].identifying_job_snapshot_id
+                return ex_repo.get_all_jobs()[0].identifying_job_snapshot_id
 
             with ThreadPoolExecutor() as executor:
                 wait([executor.submit(_fetch_snap_id) for _ in range(100)])

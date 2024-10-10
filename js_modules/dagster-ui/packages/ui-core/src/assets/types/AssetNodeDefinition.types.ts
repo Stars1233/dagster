@@ -18,6 +18,7 @@ export type AssetNodeDefinitionFragment = {
   computeKind: string | null;
   isPartitioned: boolean;
   isObservable: boolean;
+  kinds: Array<string>;
   tags: Array<{__typename: 'DefinitionTag'; key: string; value: string}>;
   owners: Array<
     {__typename: 'TeamAssetOwner'; team: string} | {__typename: 'UserAssetOwner'; email: string}
@@ -30,6 +31,11 @@ export type AssetNodeDefinitionFragment = {
       description: string;
       decisionType: Types.AutoMaterializeDecisionType;
     }>;
+  } | null;
+  automationCondition: {
+    __typename: 'AutomationCondition';
+    label: string | null;
+    expandedLabel: Array<string>;
   } | null;
   freshnessPolicy: {
     __typename: 'FreshnessPolicy';
@@ -709,6 +715,7 @@ export type AssetNodeDefinitionFragment = {
                 unique: boolean;
                 other: Array<string>;
               };
+              tags: Array<{__typename: 'DefinitionTag'; key: string; value: string}>;
             }>;
             constraints: {__typename: 'TableConstraints'; other: Array<string>} | null;
           };
@@ -731,6 +738,7 @@ export type AssetNodeDefinitionFragment = {
               unique: boolean;
               other: Array<string>;
             };
+            tags: Array<{__typename: 'DefinitionTag'; key: string; value: string}>;
           }>;
           constraints: {__typename: 'TableConstraints'; other: Array<string>} | null;
         };
@@ -886,6 +894,7 @@ export type AssetNodeDefinitionFragment = {
                             unique: boolean;
                             other: Array<string>;
                           };
+                          tags: Array<{__typename: 'DefinitionTag'; key: string; value: string}>;
                         }>;
                         constraints: {__typename: 'TableConstraints'; other: Array<string>} | null;
                       };
@@ -908,6 +917,7 @@ export type AssetNodeDefinitionFragment = {
                           unique: boolean;
                           other: Array<string>;
                         };
+                        tags: Array<{__typename: 'DefinitionTag'; key: string; value: string}>;
                       }>;
                       constraints: {__typename: 'TableConstraints'; other: Array<string>} | null;
                     };
@@ -2166,6 +2176,7 @@ export type AssetNodeDefinitionFragment = {
                             unique: boolean;
                             other: Array<string>;
                           };
+                          tags: Array<{__typename: 'DefinitionTag'; key: string; value: string}>;
                         }>;
                         constraints: {__typename: 'TableConstraints'; other: Array<string>} | null;
                       };
@@ -2188,6 +2199,7 @@ export type AssetNodeDefinitionFragment = {
                           unique: boolean;
                           other: Array<string>;
                         };
+                        tags: Array<{__typename: 'DefinitionTag'; key: string; value: string}>;
                       }>;
                       constraints: {__typename: 'TableConstraints'; other: Array<string>} | null;
                     };
@@ -3446,6 +3458,7 @@ export type AssetNodeDefinitionFragment = {
                             unique: boolean;
                             other: Array<string>;
                           };
+                          tags: Array<{__typename: 'DefinitionTag'; key: string; value: string}>;
                         }>;
                         constraints: {__typename: 'TableConstraints'; other: Array<string>} | null;
                       };
@@ -3468,6 +3481,7 @@ export type AssetNodeDefinitionFragment = {
                           unique: boolean;
                           other: Array<string>;
                         };
+                        tags: Array<{__typename: 'DefinitionTag'; key: string; value: string}>;
                       }>;
                       constraints: {__typename: 'TableConstraints'; other: Array<string>} | null;
                     };
@@ -4717,6 +4731,7 @@ export type AssetNodeDefinitionFragment = {
                       unique: boolean;
                       other: Array<string>;
                     };
+                    tags: Array<{__typename: 'DefinitionTag'; key: string; value: string}>;
                   }>;
                   constraints: {__typename: 'TableConstraints'; other: Array<string>} | null;
                 };
@@ -4739,6 +4754,7 @@ export type AssetNodeDefinitionFragment = {
                     unique: boolean;
                     other: Array<string>;
                   };
+                  tags: Array<{__typename: 'DefinitionTag'; key: string; value: string}>;
                 }>;
                 constraints: {__typename: 'TableConstraints'; other: Array<string>} | null;
               };
@@ -6003,6 +6019,7 @@ export type AssetNodeDefinitionFragment = {
                             unique: boolean;
                             other: Array<string>;
                           };
+                          tags: Array<{__typename: 'DefinitionTag'; key: string; value: string}>;
                         }>;
                         constraints: {__typename: 'TableConstraints'; other: Array<string>} | null;
                       };
@@ -6025,6 +6042,7 @@ export type AssetNodeDefinitionFragment = {
                           unique: boolean;
                           other: Array<string>;
                         };
+                        tags: Array<{__typename: 'DefinitionTag'; key: string; value: string}>;
                       }>;
                       constraints: {__typename: 'TableConstraints'; other: Array<string>} | null;
                     };
@@ -7283,6 +7301,7 @@ export type AssetNodeDefinitionFragment = {
                             unique: boolean;
                             other: Array<string>;
                           };
+                          tags: Array<{__typename: 'DefinitionTag'; key: string; value: string}>;
                         }>;
                         constraints: {__typename: 'TableConstraints'; other: Array<string>} | null;
                       };
@@ -7305,6 +7324,7 @@ export type AssetNodeDefinitionFragment = {
                           unique: boolean;
                           other: Array<string>;
                         };
+                        tags: Array<{__typename: 'DefinitionTag'; key: string; value: string}>;
                       }>;
                       constraints: {__typename: 'TableConstraints'; other: Array<string>} | null;
                     };
@@ -8563,6 +8583,7 @@ export type AssetNodeDefinitionFragment = {
                             unique: boolean;
                             other: Array<string>;
                           };
+                          tags: Array<{__typename: 'DefinitionTag'; key: string; value: string}>;
                         }>;
                         constraints: {__typename: 'TableConstraints'; other: Array<string>} | null;
                       };
@@ -8585,6 +8606,7 @@ export type AssetNodeDefinitionFragment = {
                           unique: boolean;
                           other: Array<string>;
                         };
+                        tags: Array<{__typename: 'DefinitionTag'; key: string; value: string}>;
                       }>;
                       constraints: {__typename: 'TableConstraints'; other: Array<string>} | null;
                     };
@@ -9834,6 +9856,7 @@ export type AssetNodeDefinitionFragment = {
                       unique: boolean;
                       other: Array<string>;
                     };
+                    tags: Array<{__typename: 'DefinitionTag'; key: string; value: string}>;
                   }>;
                   constraints: {__typename: 'TableConstraints'; other: Array<string>} | null;
                 };
@@ -9856,6 +9879,7 @@ export type AssetNodeDefinitionFragment = {
                     unique: boolean;
                     other: Array<string>;
                   };
+                  tags: Array<{__typename: 'DefinitionTag'; key: string; value: string}>;
                 }>;
                 constraints: {__typename: 'TableConstraints'; other: Array<string>} | null;
               };
@@ -11120,6 +11144,7 @@ export type AssetNodeDefinitionFragment = {
                             unique: boolean;
                             other: Array<string>;
                           };
+                          tags: Array<{__typename: 'DefinitionTag'; key: string; value: string}>;
                         }>;
                         constraints: {__typename: 'TableConstraints'; other: Array<string>} | null;
                       };
@@ -11142,6 +11167,7 @@ export type AssetNodeDefinitionFragment = {
                           unique: boolean;
                           other: Array<string>;
                         };
+                        tags: Array<{__typename: 'DefinitionTag'; key: string; value: string}>;
                       }>;
                       constraints: {__typename: 'TableConstraints'; other: Array<string>} | null;
                     };
@@ -12400,6 +12426,7 @@ export type AssetNodeDefinitionFragment = {
                             unique: boolean;
                             other: Array<string>;
                           };
+                          tags: Array<{__typename: 'DefinitionTag'; key: string; value: string}>;
                         }>;
                         constraints: {__typename: 'TableConstraints'; other: Array<string>} | null;
                       };
@@ -12422,6 +12449,7 @@ export type AssetNodeDefinitionFragment = {
                           unique: boolean;
                           other: Array<string>;
                         };
+                        tags: Array<{__typename: 'DefinitionTag'; key: string; value: string}>;
                       }>;
                       constraints: {__typename: 'TableConstraints'; other: Array<string>} | null;
                     };
@@ -13680,6 +13708,7 @@ export type AssetNodeDefinitionFragment = {
                             unique: boolean;
                             other: Array<string>;
                           };
+                          tags: Array<{__typename: 'DefinitionTag'; key: string; value: string}>;
                         }>;
                         constraints: {__typename: 'TableConstraints'; other: Array<string>} | null;
                       };
@@ -13702,6 +13731,7 @@ export type AssetNodeDefinitionFragment = {
                           unique: boolean;
                           other: Array<string>;
                         };
+                        tags: Array<{__typename: 'DefinitionTag'; key: string; value: string}>;
                       }>;
                       constraints: {__typename: 'TableConstraints'; other: Array<string>} | null;
                     };
@@ -14951,6 +14981,7 @@ export type AssetNodeDefinitionFragment = {
                       unique: boolean;
                       other: Array<string>;
                     };
+                    tags: Array<{__typename: 'DefinitionTag'; key: string; value: string}>;
                   }>;
                   constraints: {__typename: 'TableConstraints'; other: Array<string>} | null;
                 };
@@ -14973,6 +15004,7 @@ export type AssetNodeDefinitionFragment = {
                     unique: boolean;
                     other: Array<string>;
                   };
+                  tags: Array<{__typename: 'DefinitionTag'; key: string; value: string}>;
                 }>;
                 constraints: {__typename: 'TableConstraints'; other: Array<string>} | null;
               };

@@ -1,13 +1,14 @@
+import datetime
+
 import pytest
-from dagster import AssetCheckKey, AssetKey, Definitions, asset, asset_check
 from dagster._core.errors import DagsterError
-from dagster_airlift.core import AirflowInstance, BasicAuthBackend, build_defs_from_airflow_instance
+from dagster_airlift.core import AirflowInstance, BasicAuthBackend
 
 from .conftest import assert_link_exists
 
 
 def test_airflow_instance(airflow_instance: None) -> None:
-    """Test AirflowInstance APIs against live-running airflow.
+    """Test AirflowInstance APIs against live-running airflow. Ensure that links result in 200s.
 
     Airflow is loaded with one dag (print_dag) which contains two tasks (print_task, downstream_print_task).
     """
@@ -33,6 +34,17 @@ def test_airflow_instance(airflow_instance: None) -> None:
     assert task_info.task_id == "print_task"
     assert_link_exists("Dag url from task info object", task_info.dag_url)
 
+    task_infos = instance.get_task_infos(dag_id="print_dag")
+    assert len(task_infos) == 2
+
+    task_dict = {task_info.task_id: task_info for task_info in task_infos}
+    assert set(task_dict.keys()) == {"print_task", "downstream_print_task"}
+    assert task_dict["print_task"].dag_id == "print_dag"
+    assert task_dict["print_task"].task_id == "print_task"
+    assert task_dict["downstream_print_task"].dag_id == "print_dag"
+    assert task_dict["downstream_print_task"].task_id == "downstream_print_task"
+    assert task_dict["print_task"].downstream_task_ids == ["downstream_print_task"]
+
     task_info = instance.get_task_info(dag_id="print_dag", task_id="downstream_print_task")
     assert task_info.dag_id == "print_dag"
     assert task_info.task_id == "downstream_print_task"
@@ -54,6 +66,9 @@ def test_airflow_instance(airflow_instance: None) -> None:
 
     assert run.finished
     assert run.success
+    assert isinstance(run.start_date, datetime.datetime)
+    assert isinstance(run.end_date, datetime.datetime)
+    assert isinstance(run.logical_date, datetime.datetime)
 
     # Fetch task instance
     task_instance = instance.get_task_instance(
@@ -62,49 +77,8 @@ def test_airflow_instance(airflow_instance: None) -> None:
     assert_link_exists("Task instance", task_instance.details_url)
     assert_link_exists("Task logs", task_instance.log_url)
 
-    assert isinstance(task_instance.start_date, float)
-    assert isinstance(task_instance.end_date, float)
+    assert isinstance(task_instance.start_date, datetime.datetime)
+    assert isinstance(task_instance.end_date, datetime.datetime)
     assert isinstance(task_instance.note, str)
-
-
-def test_orchestrated_defs(airflow_instance: None) -> None:
-    """Test allowing assets and asset checks to be passed through orchestrated defs without airflow mapping,
-    and that they will be present in the ultimately created defs.
-    """
-
-    @asset
-    def print_dag__print_task():
-        pass
-
-    @asset
-    def not_orchestrated_in_airflow():
-        pass
-
-    @asset_check(asset=print_dag__print_task.key)
-    def check_print_task():
-        pass
-
-    instance = AirflowInstance(
-        auth_backend=BasicAuthBackend(
-            webserver_url="http://localhost:8080", username="admin", password="admin"
-        ),
-        name="airflow_instance",
-    )
-
-    defs = build_defs_from_airflow_instance(
-        airflow_instance=instance,
-        defs=Definitions(
-            assets=[print_dag__print_task, not_orchestrated_in_airflow],
-            asset_checks=[check_print_task],
-        ),
-    ).get_repository_def()
-    assert len(defs.assets_defs_by_key) == 3
-    assert set(defs.assets_defs_by_key.keys()) == {
-        AssetKey(["airflow_instance", "dag", "print_dag"]),
-        AssetKey(["print_dag__print_task"]),
-        AssetKey(["not_orchestrated_in_airflow"]),
-    }
-    assert len(defs.asset_checks_defs_by_key) == 1
-    assert set(defs.asset_checks_defs_by_key.keys()) == {
-        AssetCheckKey(name="check_print_task", asset_key=AssetKey(["print_dag__print_task"]))
-    }
+    assert isinstance(task_instance.logical_date, datetime.datetime)
+    assert run.logical_date == task_instance.logical_date

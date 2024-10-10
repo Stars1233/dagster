@@ -8,12 +8,6 @@ toc_max_heading_level: 2
 
 In this guide, we'll walk you through setting up Branch Deployments for a code location. Once you're finished, any time a PR is created or updated in your repository, it will automatically create or update an associated branch deployment in Dagster+.
 
-## What you'll learn
-
-- How to create a Dagster+ agent token
-- How to configure a Dagster+ agent
-- How to create and automate branch deployments for a repository
-
 <details>
   <summary>Prerequisites</summary>
 
@@ -249,7 +243,7 @@ The last step is to verify that the GitHub Action runs successfully.
   </TabItem>
   <TabItem value="gitlab" label="GitLab">
 
-### Step 4.1: Add GitLab CI/CD script to your project
+### Step 4.1: add GitLab CI/CD script to your project
 
 :::note
 If you used the GitLab app to configure you're repository, this step isn't required. [Skip ahead to Step 4.5](#step-45-verify-gitlab-pipeline-runs)
@@ -263,7 +257,7 @@ Copy the following files to your project, and **replace** all references to `qui
 
 In the next step, you'll modify these files to work with your Dagster+ setup.
 
-### Step 4.2: Add the agent registry to dagster_cloud.yaml
+### Step 4.2: add the agent registry to dagster_cloud.yaml
 
 :::note
 If you used the GitLab app to configure you're repository, this step isn't required. [Skip ahead to Step 4.5](#step-45-verify-gitlab-pipeline-runs)
@@ -276,7 +270,7 @@ For example:
 
 <CodeExample filePath="dagster-plus/deployment/branch-deployments/dagster_cloud.yaml" language="yaml" />
 
-### Step 4.3: Configure GitLab CI/CD variables
+### Step 4.3: configure GitLab CI/CD variables
 
 :::note
 If you used the GitLab app to configure you're repository, this step isn't required. [Skip ahead to Step 4.5](#step-45-verify-gitlab-pipeline-runs)
@@ -330,7 +324,7 @@ Repeat steps 3-6 for each of the secrets required for your registry type:
 
 </Tabs>
 
-### Step 4.4: Configure GitLab CI/CD script
+### Step 4.4: configure GitLab CI/CD script
 
 :::note
 If you used the GitLab app to configure you're repository, this step isn't required. [Skip ahead to Step 4.5](#step-45-verify-gitlab-pipeline-runs)
@@ -350,7 +344,7 @@ build-image:
 
 Save and commit the files to the project.
 
-### Step 4.5: Verify GitLab pipeline runs
+### Step 4.5: verify GitLab pipeline runs
 
 The last step is to verify that the GitLab pipeline runs successfully.
 

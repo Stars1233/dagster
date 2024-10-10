@@ -57,9 +57,9 @@ from dagster.version import __version__ as dagster_module_version
 
 if TYPE_CHECKING:
     from dagster._core.remote_representation.external import (
-        ExternalJob,
-        ExternalRepository,
-        ExternalResource,
+        RemoteJob,
+        RemoteRepository,
+        RemoteResource,
     )
     from dagster._core.workspace.context import IWorkspaceProcessContext
 
@@ -458,22 +458,22 @@ def hash_name(name: str) -> str:
     return hashlib.sha256(name.encode("utf-8")).hexdigest()
 
 
-def get_stats_from_external_repo(external_repo: "ExternalRepository") -> Mapping[str, str]:
+def get_stats_from_external_repo(external_repo: "RemoteRepository") -> Mapping[str, str]:
     from dagster._core.remote_representation.external_data import (
-        ExternalDynamicPartitionsDefinitionData,
-        ExternalMultiPartitionsDefinitionData,
+        DynamicPartitionsSnap,
+        MultiPartitionsSnap,
     )
 
-    num_pipelines_in_repo = len(external_repo.get_all_external_jobs())
-    num_schedules_in_repo = len(external_repo.get_external_schedules())
-    num_sensors_in_repo = len(external_repo.get_external_sensors())
-    external_asset_nodes = external_repo.get_external_asset_nodes()
-    num_assets_in_repo = len(external_asset_nodes)
-    external_resources = external_repo.get_external_resources()
+    num_pipelines_in_repo = len(external_repo.get_all_jobs())
+    num_schedules_in_repo = len(external_repo.get_schedules())
+    num_sensors_in_repo = len(external_repo.get_sensors())
+    asset_node_snaps = external_repo.get_asset_node_snaps()
+    num_assets_in_repo = len(asset_node_snaps)
+    external_resources = external_repo.get_resources()
 
-    num_checks = len(external_repo.external_repository_data.external_asset_checks or [])
+    num_checks = len(external_repo.repository_snap.asset_check_nodes or [])
     num_assets_with_checks = len(
-        {c.asset_key for c in external_repo.external_repository_data.external_asset_checks or []}
+        {c.asset_key for c in external_repo.repository_snap.asset_check_nodes or []}
     )
 
     num_partitioned_assets_in_repo = 0
@@ -489,14 +489,14 @@ def get_stats_from_external_repo(external_repo: "ExternalRepository") -> Mapping
     num_dbt_assets_in_repo = 0
     num_assets_with_code_versions_in_repo = 0
 
-    for asset in external_asset_nodes:
-        if asset.partitions_def_data:
+    for asset in asset_node_snaps:
+        if asset.partitions:
             num_partitioned_assets_in_repo += 1
 
-            if isinstance(asset.partitions_def_data, ExternalDynamicPartitionsDefinitionData):
+            if isinstance(asset.partitions, DynamicPartitionsSnap):
                 num_dynamic_partitioned_assets_in_repo += 1
 
-            if isinstance(asset.partitions_def_data, ExternalMultiPartitionsDefinitionData):
+            if isinstance(asset.partitions, MultiPartitionsSnap):
                 num_multi_partitioned_assets_in_repo += 1
 
         if asset.freshness_policy is not None:
@@ -528,7 +528,7 @@ def get_stats_from_external_repo(external_repo: "ExternalRepository") -> Mapping
 
     num_asset_reconciliation_sensors_in_repo = sum(
         1
-        for external_sensor in external_repo.get_external_sensors()
+        for external_sensor in external_repo.get_sensors()
         if external_sensor.name == "asset_reconciliation_sensor"
     )
 
@@ -566,7 +566,7 @@ def get_stats_from_external_repo(external_repo: "ExternalRepository") -> Mapping
     }
 
 
-def get_resource_stats(external_resources: Sequence["ExternalResource"]) -> Mapping[str, Any]:
+def get_resource_stats(external_resources: Sequence["RemoteResource"]) -> Mapping[str, Any]:
     used_dagster_resources = []
     used_custom_resources = False
 
@@ -590,22 +590,22 @@ def get_resource_stats(external_resources: Sequence["ExternalResource"]) -> Mapp
 def log_external_repo_stats(
     instance: DagsterInstance,
     source: str,
-    external_repo: "ExternalRepository",
-    external_job: Optional["ExternalJob"] = None,
+    remote_repo: "RemoteRepository",
+    remote_job: Optional["RemoteJob"] = None,
 ):
-    from dagster._core.remote_representation.external import ExternalJob, ExternalRepository
+    from dagster._core.remote_representation.external import RemoteJob, RemoteRepository
 
     check.inst_param(instance, "instance", DagsterInstance)
     check.str_param(source, "source")
-    check.inst_param(external_repo, "external_repo", ExternalRepository)
-    check.opt_inst_param(external_job, "external_job", ExternalJob)
+    check.inst_param(remote_repo, "external_repo", RemoteRepository)
+    check.opt_inst_param(remote_job, "remote_job", RemoteJob)
 
     if _get_instance_telemetry_enabled(instance):
         instance_id = get_or_set_instance_id()
 
-        job_name_hash = hash_name(external_job.name) if external_job else ""
-        repo_hash = hash_name(external_repo.name)
-        location_name_hash = hash_name(external_repo.handle.location_name)
+        job_name_hash = hash_name(remote_job.name) if remote_job else ""
+        repo_hash = hash_name(remote_repo.name)
+        location_name_hash = hash_name(remote_repo.handle.location_name)
 
         write_telemetry_log_line(
             TelemetryEntry(
@@ -614,7 +614,7 @@ def log_external_repo_stats(
                 event_id=str(uuid.uuid4()),
                 instance_id=instance_id,
                 metadata={
-                    **get_stats_from_external_repo(external_repo),
+                    **get_stats_from_external_repo(remote_repo),
                     "source": source,
                     "pipeline_name_hash": job_name_hash,
                     "repo_hash": repo_hash,
@@ -714,7 +714,7 @@ def log_workspace_stats(
 
     for code_location in request_context.code_locations:
         for external_repo in code_location.get_repositories().values():
-            log_external_repo_stats(instance, source="dagit", external_repo=external_repo)
+            log_external_repo_stats(instance, source="dagit", remote_repo=external_repo)
 
 
 def log_action(

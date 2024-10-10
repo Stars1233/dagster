@@ -6,8 +6,8 @@ import pytest
 from dagster import DagsterInstance
 from dagster._core.remote_representation import (
     CodeLocation,
-    ExternalRepository,
     InProcessCodeLocationOrigin,
+    RemoteRepository,
 )
 from dagster._core.remote_representation.origin import ManagedGrpcPythonEnvCodeLocationOrigin
 from dagster._core.test_utils import (
@@ -59,11 +59,11 @@ def workspace_fixture(instance_module_scoped) -> Iterator[WorkspaceProcessContex
 @pytest.fixture(name="external_repo", scope="module")
 def external_repo_fixture(
     workspace_context: WorkspaceProcessContext,
-) -> Iterator[ExternalRepository]:
+) -> Iterator[RemoteRepository]:
     yield cast(
         CodeLocation,
         next(
-            iter(workspace_context.create_request_context().get_workspace_snapshot().values())
+            iter(workspace_context.create_request_context().get_code_location_entries().values())
         ).code_location,
     ).get_repository("the_repo")
 

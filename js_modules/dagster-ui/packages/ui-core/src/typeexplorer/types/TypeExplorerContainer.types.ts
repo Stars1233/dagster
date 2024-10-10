@@ -143,6 +143,7 @@ export type TypeExplorerContainerQuery = {
                             unique: boolean;
                             other: Array<string>;
                           };
+                          tags: Array<{__typename: 'DefinitionTag'; key: string; value: string}>;
                         }>;
                         constraints: {__typename: 'TableConstraints'; other: Array<string>} | null;
                       };
@@ -165,6 +166,7 @@ export type TypeExplorerContainerQuery = {
                           unique: boolean;
                           other: Array<string>;
                         };
+                        tags: Array<{__typename: 'DefinitionTag'; key: string; value: string}>;
                       }>;
                       constraints: {__typename: 'TableConstraints'; other: Array<string>} | null;
                     };
@@ -1297,3 +1299,5 @@ export type TypeExplorerContainerQuery = {
     | {__typename: 'PipelineNotFoundError'}
     | {__typename: 'PythonError'};
 };
+
+export const TypeExplorerContainerQueryVersion = '87d977f82594a192cfa83ab18c6cc657fc810f3ef217fc2dc94c5d9b64858860';

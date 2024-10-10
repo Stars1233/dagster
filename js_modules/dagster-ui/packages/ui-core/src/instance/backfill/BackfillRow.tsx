@@ -15,10 +15,10 @@ import {PartitionStatus, PartitionStatusHealthSourceOps} from '../../partitions/
 import {PipelineReference} from '../../pipelines/PipelineReference';
 import {AssetKeyTagCollection} from '../../runs/AssetTagCollections';
 import {CreatedByTagCell} from '../../runs/CreatedByTag';
-import {runsPathWithFilters} from '../../runs/RunsFilterInput';
+import {getBackfillPath} from '../../runs/RunsFeedUtils';
 import {TimestampDisplay} from '../../schedules/TimestampDisplay';
 import {useDelayedRowQuery} from '../../workspace/VirtualizedWorkspaceTable';
-import {isThisThingAJob, useRepository} from '../../workspace/WorkspaceContext';
+import {isThisThingAJob, useRepository} from '../../workspace/WorkspaceContext/util';
 import {buildRepoAddress} from '../../workspace/buildRepoAddress';
 import {repoAddressAsHumanString} from '../../workspace/repoAddressAsString';
 import {RepoAddress} from '../../workspace/types';
@@ -75,9 +75,7 @@ export const BackfillRowLoader = (props: {
   const {data} = statusQueryResult;
   const {hasCancelableRuns} = React.useMemo(() => {
     if (data?.partitionBackfillOrError.__typename === 'PartitionBackfill') {
-      if ('partitionBackfill' in data.partitionBackfillOrError) {
-        return {hasCancelableRuns: data.partitionBackfillOrError.cancelableRuns.length > 0};
-      }
+      return {hasCancelableRuns: data.partitionBackfillOrError.cancelableRuns.length > 0};
     }
     return {hasCancelableRuns: false};
   }, [data]);
@@ -112,20 +110,7 @@ export const BackfillRowContent = ({
     <tr>
       <td style={{width: 120}}>
         <Mono>
-          <Link
-            to={
-              backfill.isAssetBackfill
-                ? `/overview/backfills/${backfill.id}`
-                : runsPathWithFilters([
-                    {
-                      token: 'tag',
-                      value: `dagster/backfill=${backfill.id}`,
-                    },
-                  ])
-            }
-          >
-            {backfill.id}
-          </Link>
+          <Link to={getBackfillPath(backfill.id, backfill.isAssetBackfill)}>{backfill.id}</Link>
         </Mono>
       </td>
       <td style={{width: 220}}>
@@ -158,11 +143,11 @@ export const BackfillRowContent = ({
   );
 };
 
-const BackfillTarget = ({
+export const BackfillTarget = ({
   backfill,
   repoAddress,
 }: {
-  backfill: BackfillTableFragment;
+  backfill: Pick<BackfillTableFragment, 'assetSelection' | 'partitionSet' | 'partitionSetName'>;
   repoAddress: RepoAddress | null;
 }) => {
   const repo = useRepository(repoAddress);
@@ -227,13 +212,17 @@ const BackfillTarget = ({
     return null;
   };
 
+  const repoLink = buildRepoLink();
+  const pipelineOrAssets = buildPipelineOrAssets();
   return (
     <Box flex={{direction: 'column', gap: 8}}>
       {buildHeader()}
-      <Box flex={{direction: 'column', gap: 4}} style={{fontSize: '12px'}}>
-        {buildRepoLink()}
-        {buildPipelineOrAssets()}
-      </Box>
+      {(pipelineOrAssets || repoLink) && (
+        <Box flex={{direction: 'column', gap: 4}} style={{fontSize: '12px'}}>
+          {repoLink}
+          {pipelineOrAssets}
+        </Box>
+      )}
     </Box>
   );
 };

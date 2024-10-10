@@ -6,7 +6,7 @@ from signal import Signals
 import pytest
 from dagster._core.instance import DagsterInstance
 from dagster._core.instance.ref import InstanceRef
-from dagster._core.remote_representation.external import ExternalRepository
+from dagster._core.remote_representation.external import RemoteRepository
 from dagster._core.scheduler.instigation import TickStatus
 from dagster._core.storage.dagster_run import DagsterRunStatus
 from dagster._core.storage.tags import SCHEDULED_EXECUTION_TIME_TAG
@@ -78,7 +78,7 @@ def _test_launch_scheduled_runs_in_subprocess(
 @pytest.mark.parametrize("executor", get_schedule_executor_names())
 def test_failure_recovery_before_run_created(
     instance: DagsterInstance,
-    external_repo: ExternalRepository,
+    external_repo: RemoteRepository,
     crash_location: str,
     crash_signal: Signals,
     executor: ThreadPoolExecutor,
@@ -89,7 +89,7 @@ def test_failure_recovery_before_run_created(
 
     freeze_datetime = initial_datetime
 
-    external_schedule = external_repo.get_external_schedule("simple_schedule")
+    external_schedule = external_repo.get_schedule("simple_schedule")
     with freeze_time(freeze_datetime):
         instance.start_schedule(external_schedule)
 
@@ -105,7 +105,7 @@ def test_failure_recovery_before_run_created(
         assert scheduler_process.exitcode != 0
 
         ticks = instance.get_ticks(
-            external_schedule.get_external_origin_id(), external_schedule.selector_id
+            external_schedule.get_remote_origin_id(), external_schedule.selector_id
         )
         assert len(ticks) == 1
         assert ticks[0].status == TickStatus.STARTED
@@ -131,7 +131,7 @@ def test_failure_recovery_before_run_created(
         )
 
         ticks = instance.get_ticks(
-            external_schedule.get_external_origin_id(), external_schedule.selector_id
+            external_schedule.get_remote_origin_id(), external_schedule.selector_id
         )
         assert len(ticks) == 1
         validate_tick(
@@ -151,7 +151,7 @@ def test_failure_recovery_before_run_created(
 @pytest.mark.parametrize("executor", get_schedule_executor_names())
 def test_failure_recovery_after_run_created(
     instance: DagsterInstance,
-    external_repo: ExternalRepository,
+    external_repo: RemoteRepository,
     crash_location: str,
     crash_signal: Signals,
     executor: ThreadPoolExecutor,
@@ -160,7 +160,7 @@ def test_failure_recovery_after_run_created(
     # it will just re-launch the already-created run when it runs again
     initial_datetime = create_datetime(year=2019, month=2, day=27, hour=0, minute=0, second=0)
     freeze_datetime = initial_datetime
-    external_schedule = external_repo.get_external_schedule("simple_schedule")
+    external_schedule = external_repo.get_schedule("simple_schedule")
     with freeze_time(freeze_datetime):
         instance.start_schedule(external_schedule)
 
@@ -176,7 +176,7 @@ def test_failure_recovery_after_run_created(
         assert scheduler_process.exitcode != 0
 
         ticks = instance.get_ticks(
-            external_schedule.get_external_origin_id(), external_schedule.selector_id
+            external_schedule.get_remote_origin_id(), external_schedule.selector_id
         )
         assert len(ticks) == 1
         assert ticks[0].status == TickStatus.STARTED
@@ -220,7 +220,7 @@ def test_failure_recovery_after_run_created(
         validate_run_exists(instance.get_runs()[0], initial_datetime)
 
         ticks = instance.get_ticks(
-            external_schedule.get_external_origin_id(), external_schedule.selector_id
+            external_schedule.get_remote_origin_id(), external_schedule.selector_id
         )
         assert len(ticks) == 1
         validate_tick(
@@ -240,14 +240,14 @@ def test_failure_recovery_after_run_created(
 @pytest.mark.parametrize("executor", get_schedule_executor_names())
 def test_failure_recovery_after_tick_success(
     instance: DagsterInstance,
-    external_repo: ExternalRepository,
+    external_repo: RemoteRepository,
     crash_location: str,
     crash_signal: Signals,
     executor: ThreadPoolExecutor,
 ):
     initial_datetime = create_datetime(year=2019, month=2, day=27, hour=0, minute=0, second=0)
     freeze_datetime = initial_datetime
-    external_schedule = external_repo.get_external_schedule("simple_schedule")
+    external_schedule = external_repo.get_schedule("simple_schedule")
     with freeze_time(freeze_datetime):
         instance.start_schedule(external_schedule)
 
@@ -271,7 +271,7 @@ def test_failure_recovery_after_tick_success(
         validate_run_exists(instance.get_runs()[0], initial_datetime)
 
         ticks = instance.get_ticks(
-            external_schedule.get_external_origin_id(), external_schedule.selector_id
+            external_schedule.get_remote_origin_id(), external_schedule.selector_id
         )
         assert len(ticks) == 1
 
@@ -303,7 +303,7 @@ def test_failure_recovery_after_tick_success(
         validate_run_exists(instance.get_runs()[0], initial_datetime)
 
         ticks = instance.get_ticks(
-            external_schedule.get_external_origin_id(), external_schedule.selector_id
+            external_schedule.get_remote_origin_id(), external_schedule.selector_id
         )
         assert len(ticks) == 1
         validate_tick(
@@ -323,14 +323,14 @@ def test_failure_recovery_after_tick_success(
 @pytest.mark.parametrize("executor", get_schedule_executor_names())
 def test_failure_recovery_between_multi_runs(
     instance: DagsterInstance,
-    external_repo: ExternalRepository,
+    external_repo: RemoteRepository,
     crash_location: str,
     crash_signal: Signals,
     executor: ThreadPoolExecutor,
 ):
     initial_datetime = create_datetime(year=2019, month=2, day=28, hour=0, minute=0, second=0)
     freeze_datetime = initial_datetime
-    external_schedule = external_repo.get_external_schedule("multi_run_schedule")
+    external_schedule = external_repo.get_schedule("multi_run_schedule")
     with freeze_time(freeze_datetime):
         instance.start_schedule(external_schedule)
 
@@ -350,7 +350,7 @@ def test_failure_recovery_between_multi_runs(
         validate_run_exists(instance.get_runs()[0], initial_datetime)
 
         ticks = instance.get_ticks(
-            external_schedule.get_external_origin_id(), external_schedule.selector_id
+            external_schedule.get_remote_origin_id(), external_schedule.selector_id
         )
         assert len(ticks) == 1
 
@@ -366,7 +366,7 @@ def test_failure_recovery_between_multi_runs(
         assert instance.get_runs_count() == 2
         validate_run_exists(instance.get_runs()[0], initial_datetime)
         ticks = instance.get_ticks(
-            external_schedule.get_external_origin_id(), external_schedule.selector_id
+            external_schedule.get_remote_origin_id(), external_schedule.selector_id
         )
         assert len(ticks) == 1
         validate_tick(

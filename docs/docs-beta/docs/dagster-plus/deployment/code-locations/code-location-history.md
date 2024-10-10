@@ -9,12 +9,6 @@ sidebar_label: "Code location history and rollbacks"
 
 Dagster+ automatically tracks metadata every time a code location is loaded. This can be used to understand when changes have been made, and what those changes were. In addition, this metadata can be used to quickly redeploy an older version.
 
-## What you'll learn
-
-- How to view code location history
-- How to roll back a code location to a previous version
-- How to navigate the code location page in the Dagster UI
-
 <details>
   <summary>Prerequisites</summary>
 
@@ -31,7 +25,7 @@ Before continuing, you should be familiar with:
 
 ![Screenshot highlighting the "Updated" column for a code location](/img/placeholder.svg)
 
-This will bring up a modal showing a history of every time that code location has been loaded, and metadata associated with that load. If you have connected Dagster+ to a GitHub or Gitlab repository, each row will have a link to the commit that was deployed at that point in time.
+This will bring up a modal showing a history of every time that code location has been loaded, and metadata associated with that load. If you have connected Dagster+ to a GitHub or GitLab repository, each row will have a link to the commit that was deployed at that point in time.
 
 If a code location has been deployed multiple times with identical metadata, these rows will be collapsed together. You can expand them by deselecting **Collapse similar entries** in the top left corner of the modal.
 

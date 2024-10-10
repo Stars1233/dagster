@@ -1,5 +1,6 @@
 import os
 import random
+import re
 import string
 from contextlib import contextmanager
 from pathlib import Path
@@ -10,6 +11,7 @@ from dagster import (
     OpExecutionContext,
     _check as check,
 )
+from dagster._annotations import public
 from dagster._core.definitions.resource_annotation import TreatAsResourceParam
 from dagster._core.errors import DagsterInvariantViolationError
 from dagster._core.pipes.client import (
@@ -43,7 +45,7 @@ from dagster_k8s.utils import get_common_labels
 
 
 def get_pod_name(run_id: str, op_name: str):
-    clean_op_name = op_name.replace("_", "-")
+    clean_op_name = re.sub("[^a-z0-9-]", "", op_name.lower().replace("_", "-"))
     suffix = "".join(random.choice(string.digits) for i in range(10))
     return f"dagster-{run_id[:18]}-{clean_op_name[:20]}-{suffix}"
 
@@ -185,6 +187,7 @@ class PipesK8sClient(PipesClient, TreatAsResourceParam):
                 context=self.kube_context,
             )
 
+    @public
     def run(
         self,
         *,

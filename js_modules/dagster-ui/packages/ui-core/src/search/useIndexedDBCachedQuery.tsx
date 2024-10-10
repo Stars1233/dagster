@@ -1,6 +1,6 @@
 import {cache} from 'idb-lru-cache';
 import memoize from 'lodash/memoize';
-import React, {createContext, useCallback, useContext} from 'react';
+import React, {createContext, useCallback, useContext, useEffect} from 'react';
 
 import {
   ApolloClient,
@@ -10,31 +10,38 @@ import {
   useApolloClient,
 } from '../apollo-client';
 import {useUpdatingRef} from '../hooks/useUpdatingRef';
+import {CompletionType, useBlockTraceUntilTrue} from '../performance/TraceContext';
 
 type CacheData<TQuery> = {
   data: TQuery;
-  version: number;
+  version: number | string;
 };
 
 export const KEY_PREFIX = 'indexdbQueryCache:';
 
 export class CacheManager<TQuery> {
-  private cache: ReturnType<typeof cache<string, CacheData<TQuery>>>;
+  private cache: ReturnType<typeof cache<string, CacheData<TQuery>>> | undefined;
   private key: string;
   private current?: CacheData<TQuery>;
   private currentAwaitable?: Promise<TQuery | undefined>;
 
   constructor(key: string) {
     this.key = `${KEY_PREFIX}${key}`;
-    this.cache = cache<string, CacheData<TQuery>>({dbName: this.key, maxCount: 1});
+    try {
+      this.cache = cache<string, CacheData<TQuery>>({dbName: this.key, maxCount: 1});
+    } catch (e) {}
   }
 
-  async get(version: number): Promise<TQuery | undefined> {
+  async get(version: number | string): Promise<TQuery | undefined> {
     if (this.current) {
       return this.current.data;
     }
     if (!this.currentAwaitable) {
       this.currentAwaitable = new Promise(async (res) => {
+        if (!this.cache) {
+          res(undefined);
+          return;
+        }
         if (await this.cache.has('cache')) {
           const {value} = await this.cache.get('cache');
           if (value && version === value.version) {
@@ -51,7 +58,7 @@ export class CacheManager<TQuery> {
     return await this.currentAwaitable;
   }
 
-  async set(data: TQuery, version: number): Promise<void> {
+  async set(data: TQuery, version: number | string): Promise<void> {
     if (
       this.current?.data === data ||
       (JSON.stringify(this.current?.data) === JSON.stringify(data) &&
@@ -59,10 +66,16 @@ export class CacheManager<TQuery> {
     ) {
       return;
     }
+    if (!this.cache) {
+      return;
+    }
     return this.cache.set('cache', {data, version}, {expiry: new Date('3030-01-01')});
   }
 
   async clear() {
+    if (!this.cache) {
+      return;
+    }
     await this.cache.delete('cache');
   }
 }
@@ -70,7 +83,7 @@ export class CacheManager<TQuery> {
 interface QueryHookParams<TVariables extends OperationVariables, TQuery> {
   key: string;
   query: DocumentNode;
-  version: number;
+  version: number | string;
   variables?: TVariables;
   onCompleted?: (data: TQuery) => void;
 }
@@ -138,6 +151,15 @@ export function useIndexedDBCachedQuery<TQuery, TVariables extends OperationVari
     fetch(true);
   }, [fetch, skip]);
 
+  const dep = useBlockTraceUntilTrue(`useIndexedDBCachedQuery-${key}`, !!data, {
+    skip,
+  });
+  useEffect(() => {
+    if (error) {
+      dep.completeDependency(CompletionType.ERROR);
+    }
+  }, [error, dep]);
+
   return {
     data,
     called: true, // Add called for compatibility with useBlockTraceOnQueryResult
@@ -152,7 +174,7 @@ interface FetchParams<TVariables extends OperationVariables> {
   key: string;
   query: DocumentNode;
   variables?: TVariables;
-  version: number;
+  version: number | string;
   bypassCache?: boolean;
 }
 
@@ -220,7 +242,7 @@ export function useGetCachedData() {
   const {getCacheManager} = useContext(IndexedDBCacheContext);
 
   return useCallback(
-    async <TQuery,>({key, version}: {key: string; version: number}) => {
+    async <TQuery,>({key, version}: {key: string; version: number | string}) => {
       const cacheManager = getCacheManager<TQuery>(key);
       return await cacheManager.get(version);
     },

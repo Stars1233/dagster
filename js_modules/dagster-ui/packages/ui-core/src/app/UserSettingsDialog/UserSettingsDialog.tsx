@@ -1,6 +1,7 @@
 import {
   Box,
   Button,
+  ButtonLink,
   Checkbox,
   Colors,
   Dialog,
@@ -15,7 +16,9 @@ import {FeatureFlag} from 'shared/app/FeatureFlags.oss';
 import {UserPreferences} from 'shared/app/UserSettingsDialog/UserPreferences.oss';
 
 import {CodeLinkProtocolSelect} from '../../code-links/CodeLinkProtocol';
+import {showCustomAlert} from '../CustomAlertProvider';
 import {getFeatureFlags, setFeatureFlags} from '../Flags';
+import {useTrackEvent} from '../analytics';
 
 type OnCloseFn = (event: React.SyntheticEvent<HTMLElement>) => void;
 type VisibleFlag = {key: string; label?: React.ReactNode; flagType: FeatureFlag};
@@ -49,6 +52,7 @@ interface DialogContentProps {
  * we want to render it.
  */
 const UserSettingsDialogContent = ({onClose, visibleFlags}: DialogContentProps) => {
+  const trackEvent = useTrackEvent();
   const [flags, setFlags] = React.useState<FeatureFlag[]>(() => getFeatureFlags());
   const [reloading, setReloading] = React.useState(false);
 
@@ -59,7 +63,14 @@ const UserSettingsDialogContent = ({onClose, visibleFlags}: DialogContentProps) 
   });
 
   const toggleFlag = (flag: FeatureFlag) => {
-    setFlags(flags.includes(flag) ? flags.filter((f) => f !== flag) : [...flags, flag]);
+    const flagSet = new Set(flags);
+    trackEvent('feature-flag', {flag, enabled: !flagSet.has(flag)});
+    if (flagSet.has(flag)) {
+      flagSet.delete(flag);
+    } else {
+      flagSet.add(flag);
+    }
+    setFlags(Array.from(flagSet));
   };
 
   const [arePreferencesChanged, setAreaPreferencesChanged] = React.useState(false);
@@ -128,11 +139,44 @@ const UserSettingsDialogContent = ({onClose, visibleFlags}: DialogContentProps) 
         <Box padding={{bottom: 8}} flex={{direction: 'column', gap: 4}}>
           <UserPreferences onChangeRequiresReload={setAreaPreferencesChanged} />
         </Box>
-        <Box padding={{top: 16}} border="top">
+        <Box padding={{vertical: 16}} border="top">
           <Box padding={{bottom: 8}}>
             <Subheading>Experimental features</Subheading>
           </Box>
           {experimentalSettings}
+        </Box>
+        <Box padding={{top: 16}} border="top">
+          <ButtonLink
+            onClick={() => {
+              indexedDB.databases().then((databases) => {
+                databases.forEach((db) => {
+                  db.name && indexedDB.deleteDatabase(db.name);
+                });
+              });
+              showCustomAlert({
+                title: 'Caches reset',
+                body: (
+                  <Box flex={{direction: 'row', gap: 4, alignItems: 'center'}}>
+                    IndexedDB cache has been reset.
+                    <ButtonLink
+                      onClick={() => {
+                        window.location.reload();
+                      }}
+                    >
+                      Click here to reload the page
+                    </ButtonLink>
+                  </Box>
+                ),
+              });
+            }}
+          >
+            <Box flex={{direction: 'row', gap: 4, alignItems: 'center'}}>
+              Reset IndexedDB cache
+              <Tooltip content="If you're seeing stale definitions or experiencing client side bugs then this may fix it">
+                <Icon name="info" />
+              </Tooltip>
+            </Box>
+          </ButtonLink>
         </Box>
       </DialogBody>
       <DialogFooter topBorder>

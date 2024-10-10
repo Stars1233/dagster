@@ -27,12 +27,11 @@ from dagster._core.definitions.run_request import RunRequest
 from dagster._core.definitions.schedule_definition import DefaultScheduleStatus
 from dagster._core.definitions.selector import JobSubsetSelector
 from dagster._core.definitions.timestamp import TimestampWithTimezone
-from dagster._core.definitions.utils import normalize_tags
 from dagster._core.errors import DagsterCodeLocationLoadError, DagsterUserCodeUnreachableError
 from dagster._core.instance import DagsterInstance
-from dagster._core.remote_representation import ExternalSchedule
+from dagster._core.remote_representation import RemoteSchedule
 from dagster._core.remote_representation.code_location import CodeLocation
-from dagster._core.remote_representation.external import ExternalJob
+from dagster._core.remote_representation.external import RemoteJob
 from dagster._core.scheduler.instigation import (
     InstigatorState,
     InstigatorStatus,
@@ -78,7 +77,7 @@ ERROR_INTERVAL_TIME = 5
 class _ScheduleLaunchContext(AbstractContextManager):
     def __init__(
         self,
-        external_schedule: ExternalSchedule,
+        external_schedule: RemoteSchedule,
         tick: InstigatorTick,
         instance: DagsterInstance,
         logger: logging.Logger,
@@ -136,7 +135,7 @@ class _ScheduleLaunchContext(AbstractContextManager):
             if day_offset <= 0:
                 continue
             self._instance.purge_ticks(
-                self._external_schedule.get_external_origin_id(),
+                self._external_schedule.get_remote_origin_id(),
                 selector_id=self._external_schedule.selector_id,
                 before=(get_current_datetime() - datetime.timedelta(days=day_offset)).timestamp(),
                 tick_statuses=list(statuses),
@@ -175,7 +174,7 @@ class ScheduleIterationTimes(NamedTuple):
     next_iteration_timestamp: float
     last_iteration_timestamp: float
 
-    def should_run_next_iteration(self, schedule: ExternalSchedule, now_timestamp: float):
+    def should_run_next_iteration(self, schedule: RemoteSchedule, now_timestamp: float):
         if schedule.cron_schedule != self.cron_schedule:
             # cron schedule has changed - always run next iteration to check
             return True
@@ -271,7 +270,7 @@ def launch_scheduled_runs(
     workspace_snapshot = {
         location_entry.origin.location_name: location_entry
         for location_entry in workspace_process_context.create_request_context()
-        .get_workspace_snapshot()
+        .get_code_location_entries()
         .values()
     }
 
@@ -282,14 +281,14 @@ def launch_scheduled_runs(
 
     tick_retention_settings = instance.get_tick_retention_settings(InstigatorType.SCHEDULE)
 
-    schedules: Dict[str, ExternalSchedule] = {}
+    schedules: Dict[str, RemoteSchedule] = {}
     error_locations = set()
 
     for location_entry in workspace_snapshot.values():
         code_location = location_entry.code_location
         if code_location:
             for repo in code_location.get_repositories().values():
-                for schedule in repo.get_external_schedules():
+                for schedule in repo.get_schedules():
                     selector_id = schedule.selector_id
                     if schedule.get_current_instigator_state(
                         all_schedule_states.get(selector_id)
@@ -328,7 +327,7 @@ def launch_scheduled_runs(
             if not schedule_state:
                 assert external_schedule.default_status == DefaultScheduleStatus.RUNNING
                 schedule_state = InstigatorState(
-                    external_schedule.get_external_origin(),
+                    external_schedule.get_remote_origin(),
                     InstigatorType.SCHEDULE,
                     InstigatorStatus.DECLARED_IN_CODE,
                     ScheduleInstigatorData(
@@ -447,7 +446,7 @@ def launch_scheduled_runs(
 def launch_scheduled_runs_for_schedule(
     workspace_process_context: IWorkspaceProcessContext,
     logger: logging.Logger,
-    external_schedule: ExternalSchedule,
+    external_schedule: RemoteSchedule,
     schedule_state: InstigatorState,
     end_datetime_utc: datetime.datetime,
     max_catchup_runs: int,
@@ -482,7 +481,7 @@ def launch_scheduled_runs_for_schedule(
 def launch_scheduled_runs_for_schedule_iterator(
     workspace_process_context: IWorkspaceProcessContext,
     logger: logging.Logger,
-    external_schedule: ExternalSchedule,
+    external_schedule: RemoteSchedule,
     schedule_state: InstigatorState,
     end_datetime_utc: datetime.datetime,
     max_catchup_runs: int,
@@ -496,7 +495,7 @@ def launch_scheduled_runs_for_schedule_iterator(
     end_datetime_utc = check.inst_param(end_datetime_utc, "end_datetime_utc", datetime.datetime)
     instance = workspace_process_context.instance
 
-    instigator_origin_id = external_schedule.get_external_origin_id()
+    instigator_origin_id = external_schedule.get_remote_origin_id()
     ticks = instance.get_ticks(instigator_origin_id, external_schedule.selector_id, limit=1)
     latest_tick: Optional[InstigatorTick] = ticks[0] if ticks else None
 
@@ -694,13 +693,13 @@ class SubmitRunRequestResult(NamedTuple):
 def _submit_run_request(
     run_request: RunRequest,
     workspace_process_context: IWorkspaceProcessContext,
-    external_schedule: ExternalSchedule,
+    external_schedule: RemoteSchedule,
     schedule_time: datetime.datetime,
     logger,
     debug_crash_flags,
 ) -> SubmitRunRequestResult:
     instance = workspace_process_context.instance
-    schedule_origin = external_schedule.get_external_origin()
+    schedule_origin = external_schedule.get_remote_origin()
 
     run = _get_existing_run_for_request(instance, external_schedule, schedule_time, run_request)
     if run:
@@ -734,14 +733,14 @@ def _submit_run_request(
             workspace_process_context, external_schedule
         )
 
-        external_job = code_location.get_external_job(job_subset_selector)
+        remote_job = code_location.get_external_job(job_subset_selector)
 
         run = _create_scheduler_run(
             instance,
             schedule_time,
             code_location,
             external_schedule,
-            external_job,
+            remote_job,
             run_request,
         )
 
@@ -769,9 +768,9 @@ def _submit_run_request(
 
 def _get_code_location_for_schedule(
     workspace_process_context: IWorkspaceProcessContext,
-    external_schedule: ExternalSchedule,
+    external_schedule: RemoteSchedule,
 ) -> CodeLocation:
-    schedule_origin = external_schedule.get_external_origin()
+    schedule_origin = external_schedule.get_remote_origin()
     return workspace_process_context.create_request_context().get_code_location(
         schedule_origin.repository_origin.code_location_origin.location_name
     )
@@ -780,7 +779,7 @@ def _get_code_location_for_schedule(
 def _schedule_runs_at_time(
     workspace_process_context: IWorkspaceProcessContext,
     logger: logging.Logger,
-    external_schedule: ExternalSchedule,
+    external_schedule: RemoteSchedule,
     schedule_time: datetime.datetime,
     timezone_str: str,
     tick_context: _ScheduleLaunchContext,
@@ -885,7 +884,7 @@ def _schedule_runs_at_time(
 
 def _get_existing_run_for_request(
     instance: DagsterInstance,
-    external_schedule: ExternalSchedule,
+    external_schedule: RemoteSchedule,
     schedule_time: datetime.datetime,
     run_request: RunRequest,
 ) -> Optional[DagsterRun]:
@@ -910,7 +909,7 @@ def _get_existing_run_for_request(
             matching_runs.append(run)
         # otherwise prevent the same named schedule (with the same execution time) across repos from effecting each other
         elif (
-            external_schedule.get_external_origin().repository_origin.get_selector_id()
+            external_schedule.get_remote_origin().repository_origin.get_selector_id()
             == run.external_job_origin.repository_origin.get_selector_id()
         ):
             matching_runs.append(run)
@@ -925,8 +924,8 @@ def _create_scheduler_run(
     instance: DagsterInstance,
     schedule_time: datetime.datetime,
     code_location: CodeLocation,
-    external_schedule: ExternalSchedule,
-    external_job: ExternalJob,
+    external_schedule: RemoteSchedule,
+    remote_job: RemoteJob,
     run_request: RunRequest,
 ) -> DagsterRun:
     from dagster._daemon.daemon import get_telemetry_daemon_session_id
@@ -935,20 +934,17 @@ def _create_scheduler_run(
     schedule_tags = run_request.tags
 
     external_execution_plan = code_location.get_external_execution_plan(
-        external_job,
+        remote_job,
         run_config,
         step_keys_to_execute=None,
         known_state=None,
     )
     execution_plan_snapshot = external_execution_plan.execution_plan_snapshot
 
-    tags = merge_dicts(
-        normalize_tags(
-            external_job.tags, allow_reserved_tags=False, warn_on_deprecated_tags=False
-        ).tags
-        or {},
-        schedule_tags,
-    )
+    tags = {
+        **remote_job.run_tags,
+        **schedule_tags,
+    }
 
     tags[SCHEDULED_EXECUTION_TIME_TAG] = schedule_time.astimezone(datetime.timezone.utc).isoformat()
     if run_request.run_key:
@@ -961,7 +957,7 @@ def _create_scheduler_run(
             "DAEMON_SESSION_ID": get_telemetry_daemon_session_id(),
             "SCHEDULE_NAME_HASH": hash_name(external_schedule.name),
             "repo_hash": hash_name(code_location.name),
-            "pipeline_name_hash": hash_name(external_job.name),
+            "pipeline_name_hash": hash_name(remote_job.name),
         },
     )
 
@@ -969,24 +965,24 @@ def _create_scheduler_run(
         job_name=external_schedule.job_name,
         run_id=None,
         run_config=run_config,
-        resolved_op_selection=external_job.resolved_op_selection,
+        resolved_op_selection=remote_job.resolved_op_selection,
         step_keys_to_execute=None,
-        op_selection=external_job.op_selection,
+        op_selection=remote_job.op_selection,
         status=DagsterRunStatus.NOT_STARTED,
         root_run_id=None,
         parent_run_id=None,
         tags=tags,
-        job_snapshot=external_job.job_snapshot,
+        job_snapshot=remote_job.job_snapshot,
         execution_plan_snapshot=execution_plan_snapshot,
-        parent_job_snapshot=external_job.parent_job_snapshot,
-        external_job_origin=external_job.get_external_origin(),
-        job_code_origin=external_job.get_python_origin(),
+        parent_job_snapshot=remote_job.parent_job_snapshot,
+        remote_job_origin=remote_job.get_remote_origin(),
+        job_code_origin=remote_job.get_python_origin(),
         asset_selection=(
             frozenset(run_request.asset_selection) if run_request.asset_selection else None
         ),
         asset_check_selection=None,
         asset_graph=code_location.get_repository(
-            external_job.repository_handle.repository_name
+            remote_job.repository_handle.repository_name
         ).asset_graph,
     )
 

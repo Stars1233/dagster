@@ -645,6 +645,7 @@ type AssetNode {
   freshnessInfo: AssetFreshnessInfo
   freshnessPolicy: FreshnessPolicy
   autoMaterializePolicy: AutoMaterializePolicy
+  automationCondition: AutomationCondition
   graphName: String
   groupName: String!
   owners: [AssetOwner!]!
@@ -661,6 +662,7 @@ type AssetNode {
   partitionStats: PartitionStats
   metadataEntries: [MetadataEntry!]!
   tags: [DefinitionTag!]!
+  kinds: [String!]!
   op: SolidDefinition
   opName: String
   opNames: [String!]!
@@ -676,6 +678,7 @@ type AssetNode {
   staleCausesByPartition(partitions: [String!]): [[StaleCause!]!]
   type: DagsterType
   hasMaterializePermission: Boolean!
+  hasReportRunlessAssetEventPermission: Boolean!
   hasAssetChecks: Boolean!
   assetChecksOrError(limit: Int, pipeline: PipelineSelector): AssetChecksOrError!
   currentAutoMaterializeEvaluationId: Int
@@ -711,7 +714,6 @@ enum ChangeReason {
 
 type AssetDependency {
   asset: AssetNode!
-  inputName: String!
   partitionMapping: PartitionMapping
 }
 
@@ -754,6 +756,11 @@ enum AutoMaterializeDecisionType {
   MATERIALIZE
   SKIP
   DISCARD
+}
+
+type AutomationCondition {
+  label: String
+  expandedLabel: [String!]!
 }
 
 union AssetOwner = UserAssetOwner | TeamAssetOwner
@@ -1072,6 +1079,7 @@ type Pipeline implements SolidContainer & IPipelineSnapshot {
   sensors: [Sensor!]!
   parentSnapshotId: String
   graphName: String!
+  runTags: [PipelineTag!]!
   presets: [PipelinePreset!]!
   isJob: Boolean!
   isAssetJob: Boolean!
@@ -1367,6 +1375,7 @@ type PipelineSnapshot implements SolidContainer & IPipelineSnapshot & PipelineRe
   parentSnapshotId: String
   graphName: String!
   solidSelection: [String!]
+  runTags: [PipelineTag!]!
 }
 
 union PipelineSnapshotOrError =
@@ -1422,6 +1431,7 @@ type Run implements PipelineRun & RunsFeedEntry {
   parentPipelineSnapshotId: String
   resolvedOpSelection: [String!]
   assetMaterializations: [MaterializationEvent!]!
+  assetChecks: [AssetCheckhandle!]
   updateTime: Float
   hasReExecutePermission: Boolean!
   hasTerminatePermission: Boolean!
@@ -1429,6 +1439,7 @@ type Run implements PipelineRun & RunsFeedEntry {
   hasConcurrencyKeySlots: Boolean!
   rootConcurrencyKeys: [String!]
   hasUnconstrainedRootNodes: Boolean!
+  hasRunMetricsEnabled: Boolean!
 }
 
 interface RunsFeedEntry {
@@ -1523,6 +1534,7 @@ type WorkspaceLocationEntry {
   loadStatus: RepositoryLocationLoadStatus!
   displayMetadata: [RepositoryMetadata!]!
   updatedTimestamp: Float!
+  versionKey: String!
   permissions: [Permission!]!
   featureFlags: [FeatureFlag!]!
 }
@@ -1628,6 +1640,8 @@ type Schedule {
   futureTick(tickTimestamp: Int!): DryRunInstigationTick!
   potentialTickTimestamps(startTimestamp: Float, upperLimit: Int, lowerLimit: Int): [Float!]!
   assetSelection: AssetSelection
+  tags: [DefinitionTag!]!
+  metadataEntries: [MetadataEntry!]!
 }
 
 enum InstigationStatus {
@@ -1704,6 +1718,7 @@ type AssetKey {
 union LaunchBackfillResult =
     LaunchBackfillSuccess
   | PartitionSetNotFoundError
+  | PartitionKeysNotFoundError
   | InvalidStepError
   | InvalidOutputError
   | RunConfigValidationInvalid
@@ -1715,6 +1730,11 @@ union LaunchBackfillResult =
   | PresetNotFoundError
   | ConflictingExecutionParamsError
   | NoModeProvidedError
+
+type PartitionKeysNotFoundError implements Error {
+  message: String!
+  partitionKeys: [String!]!
+}
 
 type LaunchBackfillSuccess {
   backfillId: String!
@@ -2139,6 +2159,7 @@ type Job implements SolidContainer & IPipelineSnapshot {
   sensors: [Sensor!]!
   parentSnapshotId: String
   graphName: String!
+  runTags: [PipelineTag!]!
   presets: [PipelinePreset!]!
   isJob: Boolean!
   isAssetJob: Boolean!
@@ -2409,6 +2430,8 @@ enum BulkActionStatus {
   FAILED
   CANCELED
   CANCELING
+  COMPLETED_SUCCESS
+  COMPLETED_FAILED
 }
 
 type DaemonHealth {
@@ -3015,6 +3038,8 @@ type Sensor {
   metadata: SensorMetadata!
   sensorType: SensorType!
   assetSelection: AssetSelection
+  tags: [DefinitionTag!]!
+  metadataEntries: [MetadataEntry!]!
 }
 
 type Target {
@@ -3181,6 +3206,7 @@ type TableColumn {
   type: String!
   description: String
   constraints: TableColumnConstraints!
+  tags: [DefinitionTag!]!
 }
 
 type TableColumnConstraints {
@@ -3267,7 +3293,13 @@ type Query {
   pipelineRunOrError(runId: ID!): RunOrError!
   runsOrError(filter: RunsFilter, cursor: String, limit: Int): RunsOrError!
   runOrError(runId: ID!): RunOrError!
-  runsFeedOrError(limit: Int!, cursor: String): RunsFeedConnectionOrError!
+  runsFeedOrError(
+    limit: Int!
+    cursor: String
+    filter: RunsFilter
+    includeRunsFromBackfills: Boolean
+  ): RunsFeedConnectionOrError!
+  runsFeedCountOrError(filter: RunsFilter, includeRunsFromBackfills: Boolean): RunsFeedCountOrError!
   runTagKeysOrError: RunTagKeysOrError
   runTagsOrError(tagKeys: [String!], valuePrefix: String, limit: Int): RunTagsOrError
   runIdsOrError(filter: RunsFilter, cursor: String, limit: Int): RunIdsOrError!
@@ -3367,6 +3399,7 @@ type WorkspaceLocationStatusEntry {
   name: String!
   loadStatus: RepositoryLocationLoadStatus!
   updateTimestamp: Float!
+  versionKey: String!
   permissions: [Permission!]!
 }
 
@@ -3429,6 +3462,12 @@ type RunsFeedConnection {
   results: [RunsFeedEntry!]!
   cursor: String!
   hasMore: Boolean!
+}
+
+union RunsFeedCountOrError = RunsFeedCount | PythonError
+
+type RunsFeedCount {
+  count: Int!
 }
 
 union RunTagKeysOrError = PythonError | RunTagKeys

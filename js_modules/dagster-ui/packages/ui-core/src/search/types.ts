@@ -28,13 +28,13 @@ export enum SearchResultType {
 export enum AssetFilterSearchResultType {
   // Add types with corresponding strings to distinguish
   // between SearchResultType.AssetGroup
-  ComputeKind = 'AssetFilterSearchResultType.ComputeKind',
+  Kind = 'AssetFilterSearchResultType.Kind',
   Tag = 'AssetFilterSearchResultType.Tag',
   CodeLocation = 'AssetFilterSearchResultType.CodeLocation',
   Owner = 'AssetFilterSearchResultType.Owner',
   AssetGroup = 'AssetFilterSearchResultType.AssetGroup',
-  StorageKind = 'AssetFilterSearchResultType.StorageKind',
   Column = 'AssetFilterSearchResultType.Column',
+  ColumnTag = 'AssetFilterSearchResultType.ColumnTag',
 }
 
 export function isAssetFilterSearchResultType(
@@ -43,11 +43,11 @@ export function isAssetFilterSearchResultType(
   return (
     type === AssetFilterSearchResultType.AssetGroup ||
     type === AssetFilterSearchResultType.CodeLocation ||
-    type === AssetFilterSearchResultType.ComputeKind ||
-    type === AssetFilterSearchResultType.StorageKind ||
+    type === AssetFilterSearchResultType.Kind ||
     type === AssetFilterSearchResultType.Owner ||
     type === AssetFilterSearchResultType.Tag ||
-    type === AssetFilterSearchResultType.Column
+    type === AssetFilterSearchResultType.Column ||
+    type === AssetFilterSearchResultType.ColumnTag
   );
 }
 
@@ -57,6 +57,7 @@ export type SearchResult = {
   href: string;
   type: SearchResultType | AssetFilterSearchResultType;
   tags?: DefinitionTag[];
+  kinds?: string[];
   numResults?: number;
   repoPath?: string;
   node?:

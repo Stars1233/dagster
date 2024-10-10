@@ -871,8 +871,7 @@ class MultiAssetSensorCursorAdvances:
         context: MultiAssetSensorEvaluationContext,
         initial_cursor: MultiAssetSensorContextCursor,
     ) -> MultiAssetSensorAssetCursorComponent:
-        from dagster._core.events import DagsterEventType
-        from dagster._core.storage.event_log.base import EventRecordsFilter
+        from dagster._core.event_api import AssetRecordsFilter
 
         advanced_records: Set[int] = self._advanced_record_ids_by_key.get(asset_key, set())
         if len(advanced_records) == 0:
@@ -893,20 +892,30 @@ class MultiAssetSensorCursorAdvances:
             latest_unconsumed_record_by_partition = (
                 initial_asset_cursor.trailing_unconsumed_partitioned_event_ids
             )
-            unconsumed_events = list(context.get_trailing_unconsumed_events(asset_key)) + list(
-                context.instance.get_event_records(
-                    EventRecordsFilter(
-                        event_type=DagsterEventType.ASSET_MATERIALIZATION,
-                        asset_key=asset_key,
-                        after_cursor=latest_consumed_event_id_at_tick_start,
-                        before_cursor=greatest_consumed_event_id_in_tick,
-                    ),
-                    ascending=True,
+
+            if greatest_consumed_event_id_in_tick > (latest_consumed_event_id_at_tick_start or 0):
+                materialization_events = []
+                has_more = True
+                cursor = None
+                while has_more:
+                    result = context.instance.fetch_materializations(
+                        AssetRecordsFilter(
+                            asset_key=asset_key,
+                            after_storage_id=latest_consumed_event_id_at_tick_start,
+                            before_storage_id=greatest_consumed_event_id_in_tick,
+                        ),
+                        ascending=True,
+                        limit=FETCH_MATERIALIZATION_BATCH_SIZE,
+                        cursor=cursor,
+                    )
+                    cursor = result.cursor
+                    has_more = result.has_more
+                    materialization_events.extend(result.records)
+                unconsumed_events = list(context.get_trailing_unconsumed_events(asset_key)) + list(
+                    materialization_events
                 )
-                if greatest_consumed_event_id_in_tick
-                > (latest_consumed_event_id_at_tick_start or 0)
-                else []
-            )
+            else:
+                unconsumed_events = []
 
             # Iterate through events in ascending order, storing the latest unconsumed
             # event for each partition. If an advanced event exists for a partition, clear
@@ -1124,6 +1133,11 @@ class MultiAssetSensorDefinition(SensorDefinition):
             status can be overridden from the Dagster UI or via the GraphQL API.
         request_assets (Optional[AssetSelection]): (Experimental) an asset selection to launch a run
             for if the sensor condition is met. This can be provided instead of specifying a job.
+        tags (Optional[Mapping[str, str]]): A set of key-value tags that annotate the sensor and can
+            be used for searching and filtering in the UI.
+        metadata (Optional[Mapping[str, object]]): A set of metadata entries that annotate the
+            sensor. Values will be normalized to typed `MetadataValue` objects.
+
     """
 
     def __init__(
@@ -1139,6 +1153,8 @@ class MultiAssetSensorDefinition(SensorDefinition):
         default_status: DefaultSensorStatus = DefaultSensorStatus.STOPPED,
         request_assets: Optional[AssetSelection] = None,
         required_resource_keys: Optional[Set[str]] = None,
+        tags: Optional[Mapping[str, str]] = None,
+        metadata: Optional[Mapping[str, object]] = None,
     ):
         resource_arg_names: Set[str] = {
             arg.name for arg in get_resource_args(asset_materialization_fn)
@@ -1245,6 +1261,8 @@ class MultiAssetSensorDefinition(SensorDefinition):
             default_status=default_status,
             asset_selection=request_assets,
             required_resource_keys=combined_required_resource_keys,
+            tags=tags,
+            metadata=metadata,
         )
 
     def __call__(self, *args, **kwargs) -> AssetMaterializationFunctionReturn:

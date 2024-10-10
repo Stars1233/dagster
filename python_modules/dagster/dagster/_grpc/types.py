@@ -12,7 +12,7 @@ from dagster._core.instance.ref import InstanceRef
 from dagster._core.origin import JobPythonOrigin, get_python_environment_entry_point
 from dagster._core.remote_representation.external_data import (
     DEFAULT_MODE_NAME,
-    job_name_for_external_partition_set_name,
+    job_name_for_partition_set_snap_name,
 )
 from dagster._core.remote_representation.origin import (
     CodeLocationOrigin,
@@ -413,11 +413,6 @@ class PartitionArgs(
             ("partition_name", str),
             ("job_name", Optional[str]),
             ("instance_ref", Optional[InstanceRef]),
-            # This is introduced in the same release that we're making it possible for an asset job
-            # to target assets with different PartitionsDefinitions. Prior user code versions can
-            # (and do) safely ignore this parameter, because, in those versions, the job name on its
-            # own is enough to specify which PartitionsDefinition to use.
-            ("selected_asset_keys", Optional[AbstractSet[AssetKey]]),
         ],
     )
 ):
@@ -428,7 +423,6 @@ class PartitionArgs(
         partition_name: str,
         job_name: Optional[str] = None,
         instance_ref: Optional[InstanceRef] = None,
-        selected_asset_keys: Optional[AbstractSet[AssetKey]] = None,
     ):
         return super(PartitionArgs, cls).__new__(
             cls,
@@ -441,16 +435,13 @@ class PartitionArgs(
             job_name=check.opt_str_param(job_name, "job_name"),
             partition_name=check.str_param(partition_name, "partition_name"),
             instance_ref=check.opt_inst_param(instance_ref, "instance_ref", InstanceRef),
-            selected_asset_keys=check.opt_nullable_set_param(
-                selected_asset_keys, "selected_asset_keys", of_type=AssetKey
-            ),
         )
 
     def get_job_name(self) -> str:
         if self.job_name:
             return self.job_name
         else:
-            return job_name_for_external_partition_set_name(self.partition_set_name)
+            return job_name_for_partition_set_snap_name(self.partition_set_name)
 
 
 @whitelist_for_serdes
@@ -466,7 +457,6 @@ class PartitionNamesArgs(
             # (and do) safely ignore this parameter, because, in those versions, the job name on its
             # own is enough to specify which PartitionsDefinition to use.
             ("job_name", Optional[str]),
-            ("selected_asset_keys", Optional[AbstractSet[AssetKey]]),
         ],
     )
 ):
@@ -475,7 +465,6 @@ class PartitionNamesArgs(
         repository_origin: RemoteRepositoryOrigin,
         partition_set_name: str,
         job_name: Optional[str] = None,
-        selected_asset_keys: Optional[AbstractSet[AssetKey]] = None,
     ):
         return super(PartitionNamesArgs, cls).__new__(
             cls,
@@ -484,16 +473,13 @@ class PartitionNamesArgs(
             ),
             job_name=check.opt_str_param(job_name, "job_name"),
             partition_set_name=check.str_param(partition_set_name, "partition_set_name"),
-            selected_asset_keys=check.opt_nullable_set_param(
-                selected_asset_keys, "selected_asset_keys", of_type=AssetKey
-            ),
         )
 
     def get_job_name(self) -> str:
         if self.job_name:
             return self.job_name
         else:
-            return job_name_for_external_partition_set_name(self.partition_set_name)
+            return job_name_for_partition_set_snap_name(self.partition_set_name)
 
 
 @whitelist_for_serdes

@@ -39,7 +39,7 @@ def start_schedule(
     location = graphene_info.context.get_code_location(schedule_selector.location_name)
     repository = location.get_repository(schedule_selector.repository_name)
 
-    external_schedule = repository.get_external_schedule(schedule_selector.schedule_name)
+    external_schedule = repository.get_schedule(schedule_selector.schedule_name)
     stored_state = graphene_info.context.instance.start_schedule(external_schedule)
     schedule_state = external_schedule.get_current_instigator_state(stored_state)
 
@@ -55,10 +55,10 @@ def stop_schedule(
     instance = graphene_info.context.instance
 
     external_schedules = {
-        schedule.get_external_origin_id(): schedule
+        schedule.get_remote_origin_id(): schedule
         for repository_location in graphene_info.context.code_locations
         for repository in repository_location.get_repositories().values()
-        for schedule in repository.get_external_schedules()
+        for schedule in repository.get_schedules()
     }
 
     external_schedule = external_schedules.get(schedule_origin_id)
@@ -92,7 +92,7 @@ def reset_schedule(
     location = graphene_info.context.get_code_location(schedule_selector.location_name)
     repository = location.get_repository(schedule_selector.repository_name)
 
-    external_schedule = repository.get_external_schedule(schedule_selector.schedule_name)
+    external_schedule = repository.get_schedule(schedule_selector.schedule_name)
     stored_state = graphene_info.context.instance.reset_schedule(external_schedule)
     schedule_state = external_schedule.get_current_instigator_state(stored_state)
 
@@ -123,9 +123,9 @@ def get_schedules_or_error(
     location = graphene_info.context.get_code_location(repository_selector.location_name)
     repository = location.get_repository(repository_selector.repository_name)
     batch_loader = RepositoryScopedBatchLoader(graphene_info.context.instance, repository)
-    external_schedules = repository.get_external_schedules()
+    external_schedules = repository.get_schedules()
     schedule_states = graphene_info.context.instance.all_instigator_state(
-        repository_origin_id=repository.get_external_origin_id(),
+        repository_origin_id=repository.get_remote_origin_id(),
         repository_selector_id=repository_selector.selector_id,
         instigator_type=InstigatorType.SCHEDULE,
         instigator_statuses=instigator_statuses,
@@ -163,7 +163,7 @@ def get_schedules_for_pipeline(
 
     location = graphene_info.context.get_code_location(pipeline_selector.location_name)
     repository = location.get_repository(pipeline_selector.repository_name)
-    external_schedules = repository.get_external_schedules()
+    external_schedules = repository.get_schedules()
 
     results = []
     for external_schedule in external_schedules:
@@ -171,7 +171,7 @@ def get_schedules_for_pipeline(
             continue
 
         schedule_state = graphene_info.context.instance.get_instigator_state(
-            external_schedule.get_external_origin_id(),
+            external_schedule.get_remote_origin_id(),
             external_schedule.selector_id,
         )
         results.append(GrapheneSchedule(external_schedule, repository, schedule_state))
@@ -189,15 +189,15 @@ def get_schedule_or_error(
     location = graphene_info.context.get_code_location(schedule_selector.location_name)
     repository = location.get_repository(schedule_selector.repository_name)
 
-    if not repository.has_external_schedule(schedule_selector.schedule_name):
+    if not repository.has_schedule(schedule_selector.schedule_name):
         raise UserFacingGraphQLError(
             GrapheneScheduleNotFoundError(schedule_name=schedule_selector.schedule_name)
         )
 
-    external_schedule = repository.get_external_schedule(schedule_selector.schedule_name)
+    external_schedule = repository.get_schedule(schedule_selector.schedule_name)
 
     schedule_state = graphene_info.context.instance.get_instigator_state(
-        external_schedule.get_external_origin_id(), external_schedule.selector_id
+        external_schedule.get_remote_origin_id(), external_schedule.selector_id
     )
     return GrapheneSchedule(external_schedule, repository, schedule_state)
 
@@ -223,10 +223,10 @@ def get_schedule_next_tick(
 
     repository = code_location.get_repository(repository_origin.repository_name)
 
-    if not repository.has_external_schedule(schedule_state.name):
+    if not repository.has_schedule(schedule_state.name):
         return None
 
-    external_schedule = repository.get_external_schedule(schedule_state.name)
+    external_schedule = repository.get_schedule(schedule_state.name)
     time_iter = external_schedule.execution_time_iterator(time.time())
 
     next_timestamp = next(time_iter).timestamp()

@@ -8,11 +8,6 @@ sidebar_position: 2
 
 As part of [role-based access control (RBAC)](/dagster-plus/access/rbac/user-roles-permissions), Dagster+ supports the ability to assign users to teams. A team is a group of users with a set of default deployment, code location, and Branch Deployment user roles.
 
-## What you'll learn
-
-- How to add, modify, and remove teams
-- How to assign roles to teams
-
 <details>
   <summary>Prerequisites</summary>
 
@@ -61,9 +56,9 @@ Navigate to the **Organization Settings > Teams** tab and locate the team you wa
 
 1. Click the **Edit** button in the **Actions** column.
 2. In the **Roles** tab, click the **Edit team role** button next to the deployment where you want to modify the team's role.
-3. In the window that displays, select the team role for the deployment. This [role](/dagster-plus/account/managing-users/managing-user-roles-permissions) will be used as the default for this team for all code locations in the deployment.
+3. In the window that displays, select the team role for the deployment. This [role](/dagster-plus/access/rbac/user-roles-permissions) will be used as the default for this team for all code locations in the deployment.
 4. Click **Save**.
-5. To set permissions for individual [code locations](/dagster-plus/account/managing-users/managing-user-roles-permissions#code-locations) in a deployment:
+5. To set permissions for individual [code locations](/dagster-plus/access/rbac/user-roles-permissions) in a deployment:
     1. Click the toggle to the left of the deployment to open a list of code locations.
     2. Next to a code location, click **Edit team role**.
     3. Select the team role for the code location.

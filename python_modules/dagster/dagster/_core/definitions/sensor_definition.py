@@ -30,6 +30,7 @@ from dagster._annotations import deprecated, deprecated_param, experimental_para
 from dagster._core.decorator_utils import get_function_params
 from dagster._core.definitions.asset_check_evaluation import AssetCheckEvaluation
 from dagster._core.definitions.asset_selection import (
+    AssetCheckKeysSelection,
     AssetSelection,
     CoercibleToAssetSelection,
     KeysAssetSelection,
@@ -44,6 +45,8 @@ from dagster._core.definitions.dynamic_partitions_request import (
 from dagster._core.definitions.events import AssetMaterialization, AssetObservation
 from dagster._core.definitions.instigation_logger import InstigationLogger
 from dagster._core.definitions.job_definition import JobDefinition
+from dagster._core.definitions.metadata import normalize_metadata
+from dagster._core.definitions.metadata.metadata_value import MetadataValue
 from dagster._core.definitions.partition import CachingDynamicPartitionsLoader
 from dagster._core.definitions.resource_annotation import get_resource_args
 from dagster._core.definitions.resource_definition import Resources
@@ -73,7 +76,8 @@ from dagster._serdes import whitelist_for_serdes
 from dagster._time import get_current_datetime
 from dagster._utils import IHasInternalInit, normalize_to_repository
 from dagster._utils.merger import merge_dicts
-from dagster._utils.warnings import normalize_renamed_param
+from dagster._utils.tags import normalize_tags
+from dagster._utils.warnings import deprecation_warning, normalize_renamed_param
 
 if TYPE_CHECKING:
     from dagster import ResourceDefinition
@@ -583,6 +587,12 @@ class SensorDefinition(IHasInternalInit):
         asset_selection (Optional[Union[str, Sequence[str], Sequence[AssetKey], Sequence[Union[AssetsDefinition, SourceAsset]], AssetSelection]]):
             (Experimental) an asset selection to launch a run for if the sensor condition is met.
             This can be provided instead of specifying a job.
+        tags (Optional[Mapping[str, str]]): A set of key-value tags that annotate the sensor and can
+            be used for searching and filtering in the UI.
+        metadata (Optional[Mapping[str, object]]): A set of metadata entries that annotate the
+            sensor. Values will be normalized to typed `MetadataValue` objects. Not currently
+            shown in the UI but available at runtime via
+            `SensorEvaluationContext.repository_def.get_sensor_def(<name>).metadata`.
         target (Optional[Union[CoercibleToAssetSelection, AssetsDefinition, JobDefinition, UnresolvedAssetJobDefinition]]):
             The target that the sensor will execute.
             It can take :py:class:`~dagster.AssetSelection` objects and anything coercible to it (e.g. `str`, `Sequence[str]`, `AssetKey`, `AssetsDefinition`).
@@ -608,6 +618,8 @@ class SensorDefinition(IHasInternalInit):
             default_status=self.default_status,
             asset_selection=self.asset_selection,
             required_resource_keys=self._raw_required_resource_keys,
+            tags=self._tags,
+            metadata=self._metadata,
             target=None,
         )
 
@@ -633,6 +645,8 @@ class SensorDefinition(IHasInternalInit):
         default_status: DefaultSensorStatus = DefaultSensorStatus.STOPPED,
         asset_selection: Optional[CoercibleToAssetSelection] = None,
         required_resource_keys: Optional[Set[str]] = None,
+        tags: Optional[Mapping[str, str]] = None,
+        metadata: Optional[Mapping[str, object]] = None,
         target: Optional[
             Union[
                 "CoercibleToAssetSelection",
@@ -724,6 +738,10 @@ class SensorDefinition(IHasInternalInit):
             required_resource_keys, "required_resource_keys", of_type=str
         )
         self._required_resource_keys = self._raw_required_resource_keys or resource_arg_names
+        self._tags = normalize_tags(tags)
+        self._metadata = normalize_metadata(
+            check.opt_mapping_param(metadata, "metadata", key_type=str)  # type: ignore  # (pyright bug)
+        )
 
     @staticmethod
     def dagster_internal_init(
@@ -738,6 +756,8 @@ class SensorDefinition(IHasInternalInit):
         default_status: DefaultSensorStatus,
         asset_selection: Optional[CoercibleToAssetSelection],
         required_resource_keys: Optional[Set[str]],
+        tags: Optional[Mapping[str, str]],
+        metadata: Optional[Mapping[str, object]],
         target: Optional[
             Union[
                 "CoercibleToAssetSelection",
@@ -758,6 +778,8 @@ class SensorDefinition(IHasInternalInit):
             default_status=default_status,
             asset_selection=asset_selection,
             required_resource_keys=required_resource_keys,
+            tags=tags,
+            metadata=metadata,
             target=target,
         )
 
@@ -836,6 +858,16 @@ class SensorDefinition(IHasInternalInit):
     @property
     def has_jobs(self) -> bool:
         return bool(self._targets)
+
+    @property
+    def tags(self) -> Mapping[str, str]:
+        """Mapping[str, str]: The tags for this sensor."""
+        return self._tags
+
+    @property
+    def metadata(self) -> Mapping[str, MetadataValue]:
+        """Mapping[str, str]: The metadata for this sensor."""
+        return self._metadata
 
     @property
     def sensor_type(self) -> SensorType:
@@ -1394,7 +1426,7 @@ def _run_requests_with_base_asset_jobs(
     asset_graph = context.repository_def.asset_graph  # type: ignore  # (possible none)
     result = []
     for run_request in run_requests:
-        if run_request.asset_selection:
+        if run_request.asset_selection is not None:
             asset_keys = run_request.asset_selection
 
             unexpected_asset_keys = (
@@ -1408,11 +1440,30 @@ def _run_requests_with_base_asset_jobs(
         else:
             asset_keys = outer_asset_selection.resolve(asset_graph)
 
+        if run_request.asset_check_keys is not None:
+            asset_check_keys = run_request.asset_check_keys
+
+            unexpected_asset_check_keys = (
+                AssetCheckKeysSelection(selected_asset_check_keys=asset_check_keys)
+                - outer_asset_selection
+            ).resolve_checks(asset_graph)
+            if unexpected_asset_check_keys:
+                deprecation_warning(
+                    subject="Including asset check keys in a sensor RunRequest that are not a subset of the sensor asset_selection",
+                    breaking_version="1.9.0",
+                    additional_warn_text=f"Unexpected asset check keys: {unexpected_asset_check_keys}.",
+                )
+        else:
+            asset_check_keys = KeysAssetSelection(selected_keys=list(asset_keys)).resolve_checks(
+                asset_graph
+            )
+
         base_job = context.repository_def.get_implicit_job_def_for_assets(asset_keys)  # type: ignore  # (possible none)
         result.append(
             run_request.with_replaced_attrs(
                 job_name=base_job.name,  # type: ignore  # (possible none)
                 asset_selection=list(asset_keys),
+                asset_check_keys=list(asset_check_keys),
             )
         )
 
